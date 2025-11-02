@@ -1,4 +1,4 @@
-# Simple Plywood Chatbot without complex dependencies
+# Modern ChatGPT-style Plywood Studio Chatbot
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -19,57 +19,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Simple in-memory plywood knowledge base
-PLYWOOD_KNOWLEDGE = {
-    "grades": """
-    PLYWOOD GRADES:
-    - Grade A: Smooth, paintable surface, no knots or defects. Best for furniture and cabinets. Premium pricing.
-    - Grade B: Solid surface with minor defects, small knots allowed. Good for painted surfaces. Mid-range pricing.
-    - Grade C: Knots and small holes allowed, rough surface. Suitable for structural applications. Budget-friendly.
-    - Grade D: Larger knots and holes allowed. Lowest cost option for backing and hidden elements.
-    """,
-    
-    "types": """
-    PLYWOOD TYPES:
-    - Interior Plywood: For indoor use only, moisture-resistant adhesives. Applications: furniture, cabinets, shelving.
-    - Exterior Plywood: Waterproof adhesives, weather-resistant. Applications: siding, outdoor furniture.
-    - Marine Plywood: Highest quality waterproof construction, no voids. Applications: boat building, docks.
-    - Structural Plywood: Engineered for load-bearing applications. Applications: flooring, roofing, wall sheathing.
-    """,
-    
-    "specifications": """
-    STANDARD SPECIFICATIONS:
-    Thicknesses: 3mm (1/8"), 6mm (1/4"), 9mm (3/8"), 12mm (1/2"), 15mm (5/8"), 18mm (3/4"), 25mm (1")
-    Sizes: 4'x8' (most common), 4'x4', 5'x5', custom cuts available
-    Wood Species: Birch (strong), Oak (premium), Pine (economical), Poplar (paint-grade), Maple (furniture-grade)
-    """,
-    
-    "pricing": """
-    PRICING STRUCTURE:
-    - Grade A Birch 18mm: $89.99/sheet
-    - Grade B Birch 12mm: $54.99/sheet  
-    - Marine Grade 18mm: $125.99/sheet
-    - Structural OSB 18mm: $45.99/sheet
-    
-    BULK DISCOUNTS:
-    - 10+ sheets: 5% discount
-    - 25+ sheets: 10% discount
-    - 50+ sheets: 15% discount
-    - 100+ sheets: 20% discount
-    """,
-    
-    "services": """
-    OUR SERVICES:
-    - Custom cutting to size
-    - Edge banding application
-    - Local delivery (within 50 miles)
-    - Bulk ordering and storage
-    - Technical consultation
-    - Project planning assistance
-    - Contractor accounts available
-    """
-}
-
 class ChatMessage(BaseModel):
     message: str
     user_id: str | None = None
@@ -79,111 +28,9 @@ class ChatResponse(BaseModel):
     timestamp: str
     response_time_ms: int
 
-def get_relevant_context(query: str) -> str:
-    """Get relevant plywood information based on the query"""
-    query_lower = query.lower()
-    relevant_context = []
-    
-    # Check which knowledge sections are relevant
-    if any(word in query_lower for word in ['grade', 'quality', 'a grade', 'b grade', 'c grade', 'd grade']):
-        relevant_context.append(PLYWOOD_KNOWLEDGE['grades'])
-    
-    if any(word in query_lower for word in ['type', 'interior', 'exterior', 'marine', 'structural']):
-        relevant_context.append(PLYWOOD_KNOWLEDGE['types'])
-    
-    if any(word in query_lower for word in ['size', 'thickness', 'dimension', 'spec', 'species', 'birch', 'oak']):
-        relevant_context.append(PLYWOOD_KNOWLEDGE['specifications'])
-    
-    if any(word in query_lower for word in ['price', 'cost', 'pricing', 'discount', 'bulk']):
-        relevant_context.append(PLYWOOD_KNOWLEDGE['pricing'])
-    
-    if any(word in query_lower for word in ['service', 'delivery', 'cutting', 'contractor']):
-        relevant_context.append(PLYWOOD_KNOWLEDGE['services'])
-    
-    # If no specific context found, include basic info
-    if not relevant_context:
-        relevant_context = [PLYWOOD_KNOWLEDGE['types'], PLYWOOD_KNOWLEDGE['grades']]
-    
-    return "\n\n".join(relevant_context)
-
-def build_plywood_prompt(query: str) -> tuple[str, str]:
-    """Build specialized prompt for plywood business"""
-    from config import DEFAULT_MODEL
-    
-    context = get_relevant_context(query)
-    
-    prompt_template = """You are an expert plywood business assistant. Use the following information to answer the customer's question accurately and helpfully.
-
-PLYWOOD BUSINESS INFORMATION:
-{context}
-
-CUSTOMER QUESTION: {query}
-
-Please provide a helpful, professional response. If pricing is mentioned, note that prices may vary and suggest contacting for current quotes. If technical specifications are needed, provide accurate information from the context above.
-
-RESPONSE:"""
-
-    prompt = prompt_template.format(context=context, query=query)
-    return DEFAULT_MODEL, prompt
-
-def run_plywood_chat(message: str, user_id: str | None = None) -> ChatResponse:
-    """Process plywood business chat message"""
-    start_time = time.time()
-    
-    # Check cache
-    cached = cache_get(message)
-    if cached:
-        return ChatResponse(
-            response=cached,
-            timestamp=datetime.now().isoformat(),
-            response_time_ms=int((time.time() - start_time) * 1000)
-        )
-    
-    # Build specialized prompt
-    model, prompt = build_plywood_prompt(message)
-    
-    # Call LLM
-    try:
-        raw_response = llm_call(model, prompt)
-        processed = secure_output(raw_response)
-        final_response = apply_guardrails(processed)
-        
-        # Add business-specific formatting
-        if "price" in message.lower() or "cost" in message.lower():
-            final_response += "\n\n💰 *Prices subject to change. Contact us for current pricing and bulk discounts.*"
-        
-        if "stock" in message.lower() or "availability" in message.lower():
-            final_response += "\n\n📦 *Please contact us to check current inventory levels.*"
-        
-    except Exception as e:
-        logging.error(f"LLM call failed: {e}")
-        final_response = "I apologize, but I'm experiencing technical difficulties. Please try again or contact our sales team directly for assistance with your plywood needs."
-    
-    # Cache the response
-    total_time = int((time.time() - start_time) * 1000)
-    cache_set(message, final_response, CACHE_TTL_SECONDS)
-    
-    return ChatResponse(
-        response=final_response,
-        timestamp=datetime.now().isoformat(),
-        response_time_ms=total_time
-    )
-
-@app.post("/chat", response_model=ChatResponse)
-async def chat(message: ChatMessage):
-    """Chat endpoint for plywood business queries"""
-    if not message.message.strip():
-        raise HTTPException(status_code=400, detail="Message cannot be empty")
-    
-    try:
-        return run_plywood_chat(message.message, message.user_id)
-    except Exception as e:
-        logging.error(f"Chat error: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
 @app.get("/", response_class=HTMLResponse)
 async def chat_interface():
-    """Beautiful plywood business chat interface"""
+    """Modern ChatGPT-style interface for Plywood Studio"""
     return """
 <!DOCTYPE html>
 <html lang="en">
@@ -192,186 +39,614 @@ async def chat_interface():
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🏗️ Plywood Studio AI Assistant</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #8B4513 0%, #D2B48C 100%);
-            height: 100vh; display: flex; justify-content: center; align-items: center;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        .chat-container {
-            width: 90%; max-width: 900px; height: 90vh;
-            background: white; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            display: flex; flex-direction: column; overflow: hidden;
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: #f7f7f8;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
+        
         .chat-header {
-            background: linear-gradient(135deg, #8B4513, #A0522D);
-            color: white; padding: 20px; text-align: center;
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        .chat-header h1 { font-size: 28px; margin-bottom: 8px; }
-        .chat-header p { opacity: 0.9; font-size: 16px; }
-        .business-info {
-            background: #f8f9fa; padding: 15px; border-bottom: 1px solid #e0e0e0;
-            font-size: 14px; color: #666;
+        
+        .chat-header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 5px;
         }
+        
+        .chat-header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        
+        .business-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            margin-top: 10px;
+            font-size: 12px;
+            display: inline-block;
+        }
+        
+        .chat-container {
+            flex: 1;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 80px);
+        }
+        
         .chat-messages {
-            flex: 1; padding: 20px; overflow-y: auto; background: #f8f9fa;
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
         }
-        .message {
-            margin-bottom: 15px; padding: 15px 18px; border-radius: 18px; max-width: 85%;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        
+        .message-wrapper {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
         }
-        .user-message {
-            background: linear-gradient(135deg, #007bff, #0056b3); color: white;
-            margin-left: auto; border-bottom-right-radius: 5px;
+        
+        .message-wrapper.user {
+            flex-direction: row-reverse;
         }
+        
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        
+        .bot-avatar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .user-avatar {
+            background: linear-gradient(135deg, #10a37f 0%, #1a7f64 100%);
+            color: white;
+        }
+        
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            font-size: 15px;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+        
         .bot-message {
-            background: white; color: #333; border: 1px solid #e0e0e0; 
-            border-bottom-left-radius: 5px;
+            background: white;
+            border: 1px solid #e1e8ed;
+            color: #374151;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
-        .chat-input-container {
-            padding: 20px; background: white; border-top: 1px solid #e0e0e0;
-            display: flex; gap: 12px;
+        
+        .user-message {
+            background: #10a37f;
+            color: white;
         }
+        
+        .message-time {
+            font-size: 11px;
+            opacity: 0.6;
+            margin-top: 4px;
+        }
+        
+        .welcome-section {
+            text-align: center;
+            padding: 40px 20px;
+            background: white;
+            border-radius: 12px;
+            margin: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .welcome-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 12px;
+        }
+        
+        .welcome-subtitle {
+            color: #6b7280;
+            margin-bottom: 24px;
+        }
+        
+        .suggestions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-top: 24px;
+        }
+        
+        .suggestion-card {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: left;
+        }
+        
+        .suggestion-card:hover {
+            background: #f3f4f6;
+            border-color: #10a37f;
+            transform: translateY(-1px);
+        }
+        
+        .suggestion-icon {
+            font-size: 20px;
+            margin-bottom: 8px;
+        }
+        
+        .suggestion-title {
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+        
+        .suggestion-desc {
+            color: #6b7280;
+            font-size: 12px;
+        }
+        
+        .chat-input-section {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        .input-wrapper {
+            max-width: 800px;
+            margin: 0 auto;
+            position: relative;
+        }
+        
+        .input-container {
+            display: flex;
+            align-items: flex-end;
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 24px;
+            padding: 12px;
+            transition: border-color 0.2s ease;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        }
+        
+        .input-container:focus-within {
+            border-color: #10a37f;
+        }
+        
         .chat-input {
-            flex: 1; padding: 15px 20px; border: 2px solid #ddd;
-            border-radius: 25px; font-size: 16px; outline: none;
-            transition: border-color 0.3s;
+            flex: 1;
+            border: none;
+            outline: none;
+            padding: 8px 12px;
+            font-size: 16px;
+            resize: none;
+            max-height: 120px;
+            min-height: 24px;
+            font-family: inherit;
         }
-        .chat-input:focus { border-color: #8B4513; }
+        
         .send-button {
-            padding: 15px 30px; background: linear-gradient(135deg, #8B4513, #A0522D); 
-            color: white; border: none; border-radius: 25px; cursor: pointer;
-            font-weight: bold; transition: transform 0.2s;
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: #10a37f;
+            color: white;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            margin-left: 8px;
         }
-        .send-button:hover { transform: translateY(-2px); }
-        .quick-questions {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 10px; margin: 15px 0; padding: 0 5px;
+        
+        .send-button:hover:not(:disabled) {
+            background: #0f8c6c;
+            transform: scale(1.05);
         }
-        .quick-question {
-            padding: 10px 15px; background: linear-gradient(135deg, #e9ecef, #dee2e6); 
-            border: none; border-radius: 20px; cursor: pointer; font-size: 14px;
-            transition: all 0.3s; text-align: center;
+        
+        .send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
-        .quick-question:hover { 
-            background: linear-gradient(135deg, #8B4513, #A0522D); 
-            color: white; transform: translateY(-2px);
+        
+        .typing-indicator {
+            display: none;
+            padding: 20px;
+            text-align: center;
         }
-        .typing { opacity: 0.7; font-style: italic; }
-        .response-time { font-size: 12px; color: #999; margin-top: 5px; }
+        
+        .typing-dots {
+            display: inline-flex;
+            gap: 4px;
+        }
+        
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10a37f;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+        
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+        
+        @media (max-width: 768px) {
+            .chat-messages {
+                padding: 16px;
+            }
+            
+            .message-content {
+                max-width: 85%;
+            }
+            
+            .suggestions {
+                grid-template-columns: 1fr;
+            }
+            
+            .chat-input-section {
+                padding: 16px;
+            }
+        }
+        
+        /* Scrollbar styling */
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .chat-messages::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 3px;
+        }
+        
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
+        }
     </style>
 </head>
 <body>
+    <div class="chat-header">
+        <h1>🏗️ Plywood Studio AI Assistant</h1>
+        <p>Premium plywood, doors and laminate solutions in Hyderabad since 2022</p>
+        <div class="business-badge">
+            📍 Goshamahal, Hyderabad • ⭐ 5.0 Rating • 🏷️ Centuryply, Sainik, Greenply
+        </div>
+    </div>
+    
     <div class="chat-container">
-        <div class="chat-header">
-            <h1>🏗️ Plywood Studio AI Assistant</h1>
-            <p>Premium plywood, doors and laminate solutions in Hyderabad since 2022</p>
-        </div>
-        
-        <div class="business-info">
-            <strong>📍 Location:</strong> Goshamahal, Hyderabad • <strong>🏷️ Brands:</strong> Centuryply, Sainik, Greenply • <strong>⭐ Rating:</strong> 5.0 stars on IndiaMART
-        </div>
-        
         <div class="chat-messages" id="chatMessages">
-            <div class="message bot-message">
-                <strong>🤖 Plywood Studio Assistant:</strong><br>
-                Welcome to Plywood Studio! I'm here to help you with:
-                <ul style="margin: 10px 0; padding-left: 20px;">
-                    <li><strong>Wooden Plywood:</strong> Centuryply, Sainik, Greenply brands</li>
-                    <li><strong>Wooden Doors:</strong> Flush doors, panel doors, laminate doors</li>
-                    <li><strong>Laminate Sheets:</strong> Various thicknesses and finishes</li>
-                    <li><strong>Door Hardware:</strong> Quality locks and accessories</li>
-                    <li><strong>Business Info:</strong> Location, contact, and services</li>
-                </ul>
-                Ask me anything about our products or services!
-            </div>
-            
-            <div class="quick-questions">
-                <button class="quick-question" onclick="askQuestion('What plywood brands do you carry?')">🏷️ Our Brands</button>
-                <button class="quick-question" onclick="askQuestion('What types of doors are available?')">� Door Options</button>
-                <button class="quick-question" onclick="askQuestion('Where is Plywood Studio located?')">� Location & Contact</button>
-                <button class="quick-question" onclick="askQuestion('Do you have laminate sheets?')">� Laminate Sheets</button>
-                <button class="quick-question" onclick="askQuestion('What door hardware do you offer?')">� Door Hardware</button>
-                <button class="quick-question" onclick="askQuestion('How can I contact Plywood Studio?')">� Contact Us</button>
+            <div class="welcome-section" id="welcomeSection">
+                <div class="welcome-title">👋 Welcome to Plywood Studio!</div>
+                <div class="welcome-subtitle">
+                    I'm your AI assistant for all plywood, door, and laminate needs. How can I help you today?
+                </div>
+                
+                <div class="suggestions">
+                    <div class="suggestion-card" onclick="askQuestion('What plywood brands do you carry?')">
+                        <div class="suggestion-icon">🏷️</div>
+                        <div class="suggestion-title">Our Brands</div>
+                        <div class="suggestion-desc">Centuryply, Sainik, Greenply</div>
+                    </div>
+                    <div class="suggestion-card" onclick="askQuestion('What types of doors are available?')">
+                        <div class="suggestion-icon">🚪</div>
+                        <div class="suggestion-title">Door Options</div>
+                        <div class="suggestion-desc">Flush, Panel, Laminate doors</div>
+                    </div>
+                    <div class="suggestion-card" onclick="askQuestion('Where is Plywood Studio located?')">
+                        <div class="suggestion-icon">📍</div>
+                        <div class="suggestion-title">Location & Contact</div>
+                        <div class="suggestion-desc">Goshamahal, Hyderabad</div>
+                    </div>
+                    <div class="suggestion-card" onclick="askQuestion('Do you have laminate sheets?')">
+                        <div class="suggestion-icon">📄</div>
+                        <div class="suggestion-title">Laminate Sheets</div>
+                        <div class="suggestion-desc">Various thicknesses & finishes</div>
+                    </div>
+                </div>
             </div>
         </div>
         
-        <div class="chat-input-container">
-            <input type="text" id="chatInput" class="chat-input" 
-                   placeholder="Ask about our plywood brands, doors, laminate sheets, or business info..." 
-                   onkeypress="if(event.key==='Enter') sendMessage()">
-            <button class="send-button" onclick="sendMessage()">Send 📤</button>
+        <div class="typing-indicator" id="typingIndicator">
+            <div class="typing-dots">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+            <span style="margin-left: 8px; color: #6b7280;">AI is thinking...</span>
+        </div>
+        
+        <div class="chat-input-section">
+            <div class="input-wrapper">
+                <div class="input-container">
+                    <textarea 
+                        id="chatInput" 
+                        class="chat-input" 
+                        placeholder="Ask about plywood, doors, laminate sheets, or our services..."
+                        rows="1"
+                        onkeydown="handleKeyPress(event)"
+                        oninput="adjustTextareaHeight()"
+                    ></textarea>
+                    <button class="send-button" onclick="sendMessage()" id="sendButton">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M2,21L23,12L2,3V10L17,12L2,14V21Z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
+        let messageCount = 0;
+        
+        function adjustTextareaHeight() {
+            const textarea = document.getElementById('chatInput');
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+        }
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+        
+        function addMessage(content, isUser = false) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const welcomeSection = document.getElementById('welcomeSection');
+            
+            // Hide welcome section after first message
+            if (welcomeSection && messageCount === 0) {
+                welcomeSection.style.display = 'none';
+            }
+            
+            const messageWrapper = document.createElement('div');
+            messageWrapper.className = `message-wrapper ${isUser ? 'user' : 'bot'}`;
+            
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            messageWrapper.innerHTML = `
+                <div class="message-avatar ${isUser ? 'user-avatar' : 'bot-avatar'}">
+                    ${isUser ? '👤' : '🤖'}
+                </div>
+                <div class="message-content ${isUser ? 'user-message' : 'bot-message'}">
+                    ${content}
+                    <div class="message-time">${timeStr}</div>
+                </div>
+            `;
+            
+            messagesDiv.appendChild(messageWrapper);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            messageCount++;
+        }
+        
+        function showTypingIndicator() {
+            document.getElementById('typingIndicator').style.display = 'block';
+            const messagesDiv = document.getElementById('chatMessages');
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        function hideTypingIndicator() {
+            document.getElementById('typingIndicator').style.display = 'none';
+        }
+        
         async function sendMessage() {
             const input = document.getElementById('chatInput');
+            const sendButton = document.getElementById('sendButton');
             const message = input.value.trim();
+            
             if (!message) return;
-
-            addMessage(message, 'user');
+            
+            // Add user message
+            addMessage(message, true);
+            
+            // Clear input and disable button
             input.value = '';
-
-            const typingId = addMessage('🔍 Searching our plywood database...', 'bot', true);
-
+            adjustTextareaHeight();
+            sendButton.disabled = true;
+            
+            // Show typing indicator
+            showTypingIndicator();
+            
             try {
                 const response = await fetch('/chat', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message })
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        user_id: 'web-user'
+                    })
                 });
                 
                 const data = await response.json();
-                document.getElementById(typingId).remove();
                 
-                const responseHtml = data.response.replace(/\\n/g, '<br>') + 
-                    `<div class="response-time">⏱️ Response time: ${data.response_time_ms}ms</div>`;
-                addMessage(responseHtml, 'bot');
+                // Hide typing indicator and add bot response
+                hideTypingIndicator();
+                addMessage(data.response);
                 
             } catch (error) {
-                document.getElementById(typingId).remove();
-                addMessage('❌ Sorry, I encountered an error. Please try again or contact our sales team.', 'bot');
+                hideTypingIndicator();
+                addMessage('Sorry, I encountered an error. Please try again.');
+                console.error('Error:', error);
+            } finally {
+                sendButton.disabled = false;
+                input.focus();
             }
         }
-
-        function addMessage(content, sender, isTyping = false) {
-            const messagesContainer = document.getElementById('chatMessages');
-            const messageDiv = document.createElement('div');
-            const messageId = 'msg-' + Date.now();
-            messageDiv.id = messageId;
-            messageDiv.className = `message ${sender}-message ${isTyping ? 'typing' : ''}`;
-            
-            if (sender === 'user') {
-                messageDiv.innerHTML = `<strong>👤 You:</strong><br>${content}`;
-            } else {
-                messageDiv.innerHTML = `<strong>🤖 Plywood Expert:</strong><br>${content}`;
-            }
-            
-            messagesContainer.appendChild(messageDiv);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            
-            return messageId;
-        }
-
+        
         function askQuestion(question) {
-            document.getElementById('chatInput').value = question;
+            const input = document.getElementById('chatInput');
+            input.value = question;
             sendMessage();
         }
+        
+        // Focus input on load
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('chatInput').focus();
+        });
     </script>
 </body>
 </html>
-    """
+"""
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat_endpoint(message: ChatMessage):
+    """Enhanced chat endpoint with plywood business focus"""
+    start_time = time.time()
+    
+    try:
+        # Check cache first
+        cache_key = f"plywood_query:{hash(message.message)}"
+        cached_response = cache_get(cache_key)
+        
+        if cached_response:
+            logging.info(f"Cache hit for question: {message.message}")
+            processing_time = int((time.time() - start_time) * 1000)
+            return ChatResponse(
+                response=cached_response,
+                timestamp=datetime.now().isoformat(),
+                response_time_ms=processing_time
+            )
+        
+        # Build specialized prompt for plywood business
+        context = get_relevant_context(message.message)
+        prompt_template = """You are an expert assistant for Plywood Studio in Hyderabad. Use the following information to answer the customer's question accurately and helpfully.
+
+PLYWOOD STUDIO INFORMATION:
+{context}
+
+CUSTOMER QUESTION: {query}
+
+Please provide a helpful, accurate response focusing on our plywood products, doors, laminate sheets, and services. Be professional and informative."""
+
+        prompt = prompt_template.format(
+            context=context,
+            query=message.message
+        )
+        
+        # Get LLM response
+        llm_start = time.time()
+        raw_response = llm_call("gpt-3.5-turbo", prompt)
+        llm_time = int((time.time() - llm_start) * 1000)
+        logging.info(f"LLM latency: {llm_time}ms")
+        
+        # Apply safety checks
+        safe_response = apply_guardrails(raw_response)
+        final_response = secure_output(safe_response)
+        
+        # Cache the response
+        cache_set(cache_key, final_response, CACHE_TTL_SECONDS)
+        logging.info(f"Cached answer for question: {message.message}")
+        
+        processing_time = int((time.time() - start_time) * 1000)
+        
+        return ChatResponse(
+            response=final_response,
+            timestamp=datetime.now().isoformat(),
+            response_time_ms=processing_time
+        )
+        
+    except Exception as e:
+        logging.error(f"Error in chat endpoint: {e}")
+        processing_time = int((time.time() - start_time) * 1000)
+        return ChatResponse(
+            response="I apologize, but I'm experiencing some technical difficulties. Please try asking your question again.",
+            timestamp=datetime.now().isoformat(),
+            response_time_ms=processing_time
+        )
+
+def get_relevant_context(query: str) -> str:
+    """Get relevant business information based on the query"""
+    query_lower = query.lower()
+    relevant_context = []
+    
+    # Business info
+    if any(word in query_lower for word in ['business', 'company', 'location', 'address', 'contact', 'about']):
+        relevant_context.append("Plywood Studio is a partnership firm established in 2022, located at 5-5-983, 5-5-982/1, Goshamahal, Hyderabad-500012, Telangana. We are GST registered (36ABCFP0708R1ZW) with 5-25 Cr annual turnover and up to 10 employees. We have a 5.0 star rating on IndiaMART.")
+    
+    # Products
+    if any(word in query_lower for word in ['plywood', 'brand', 'product', 'wood']):
+        relevant_context.append("We are authorized dealers for premium plywood brands: Centuryply (Club Prime, Bond 710), Sainik MR Plywood, and Greenply. We offer various grades and specifications for different applications.")
+    
+    # Doors
+    if any(word in query_lower for word in ['door', 'doors', 'flush', 'panel']):
+        relevant_context.append("Our wooden door range includes: Greenply Plywood Flush Doors, Wooden Panel Polish Doors, and Plywood Laminate Doors. Available in standard and custom sizes.")
+    
+    # Laminate
+    if any(word in query_lower for word in ['laminate', 'sheet', 'sunmica']):
+        relevant_context.append("We supply laminate sheets in various thicknesses including 1mm and 1.5mm options, with different finishes and colors for interior decoration.")
+    
+    # Hardware
+    if any(word in query_lower for word in ['hardware', 'lock', 'locks']):
+        relevant_context.append("We offer door hardware including Quba Vault Main Door Rim Locks and other quality door accessories.")
+    
+    # Default context if nothing specific
+    if not relevant_context:
+        relevant_context = [
+            "Plywood Studio specializes in premium plywood, wooden doors, laminate sheets, and door hardware. We carry trusted brands like Centuryply, Sainik, and Greenply.",
+            "Located in Goshamahal, Hyderabad since 2022. Contact us via IndiaMART for quotes and availability."
+        ]
+    
+    return "\n\n".join(relevant_context)
 
 @app.get("/api/business-info")
 async def get_business_info():
-    """Get plywood business information"""
+    """Get Plywood Studio business information"""
     return {
-        "company": "Premium Plywood Solutions",
-        "specialties": ["Interior Plywood", "Exterior Plywood", "Marine Grade", "Structural Plywood"],
-        "services": ["Custom Cutting", "Bulk Orders", "Delivery", "Technical Consultation"],
-        "grades_available": ["Grade A", "Grade B", "Grade C", "Grade D"],
-        "contact": "Contact through this chat interface for pricing and availability"
+        "company": "Plywood Studio",
+        "location": "Goshamahal, Hyderabad-500012, Telangana",
+        "established": "2022",
+        "brands": ["Centuryply", "Sainik", "Greenply"],
+        "products": ["Wooden Plywood", "Wooden Doors", "Laminate Sheets", "Door Hardware"],
+        "rating": "5.0 stars on IndiaMART",
+        "contact": "Available via IndiaMART platform"
     }
 
 @app.get("/health")
@@ -384,5 +659,4 @@ if __name__ == "__main__":
     print("💻 Web Interface: http://localhost:8001")
     print("📋 Business Info API: http://localhost:8001/api/business-info")
     print("🎯 Ready to assist with plywood products, pricing, and specifications!")
-    
     uvicorn.run(app, host="0.0.0.0", port=8001)
