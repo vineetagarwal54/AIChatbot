@@ -4,7 +4,7 @@ A modern AI-powered chatbot for Plywood Studio - your premium plywood, doors, an
 
 ## � Live Demo
 
-![Plywood Studio Chatbot Interface](screenshots/chatbot-interface.png)
+![Plywood Studio Chatbot Interface](chatbot-interface.png)
 
 *Modern ChatGPT-style interface with real-time responses and business-specific knowledge*
 
