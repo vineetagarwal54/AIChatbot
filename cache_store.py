@@ -3,19 +3,25 @@
 from typing import Optional
 import os
 import logging
-import redis
+import time
+try:
+    import redis
+except Exception:
+    redis = None
 
 USE_REDIS = False
 
 try:
     REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-    _client = redis.Redis.from_url(REDIS_URL)
-    _client.ping()  # Check if Redis is available
-    USE_REDIS = True
-    logging.info(f"Redis is available and will be used for caching. {REDIS_URL}")
-
+    if redis:
+        _client = redis.Redis.from_url(REDIS_URL)
+        _client.ping()  # Check if Redis is available
+        USE_REDIS = True
+        logging.info(f"Redis is available and will be used for caching. {REDIS_URL}")
+    else:
+        raise RuntimeError("redis library not installed")
 except Exception as e:
-    logging.warning(f"Redis is not available: {e}. Caching will not be used.")
+    logging.warning(f"Redis is not available: {e}. Falling back to in-memory cache.")
     USE_REDIS = False
     _client = {}
 
@@ -31,9 +37,18 @@ def get(key: str) -> Optional[str]:
         value = _client.get(_key(key))
         return value.decode('utf-8') if value else None
     else:
-        value, expiry = _client.get(_key(key), (None, None))
-        if time.time() < expiry:
-            return value
+        entry = _client.get(_key(key))
+        if not entry:
+            return None
+        value, expiry = entry
+        # If expiry is None or invalid, treat as expired
+        try:
+            if time.time() < expiry:
+                return value
+        except Exception:
+            return None
+        # expired - remove and return None
+        _client.pop(_key(key), None)
         return None
     
 def set(key: str, value: str, ttl: int = 3600) -> None:

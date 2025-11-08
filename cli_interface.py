@@ -17,16 +17,21 @@ logging.basicConfig(level=logging.INFO,
 
 from cache_store import get as cache_get, set as cache_set
 from router import build_prompt
-from llm_client_hybrid import call as llm_call
+from llm_client_langchain import call as llm_call  # Now with LangChain RAG!
 from postprocess import secure_output
 from config import CACHE_TTL_SECONDS
-from guardrails import apply_guardrails
+from guardrails import apply_guardrails, is_business_related
 
 def run_pipeline(question: str):
     """
     Run the intelligent pipeline with smart LLM routing
     """
     logging.info(f"Starting pipeline for question: {question}")
+    
+    # Step 0: Check if question is business-related
+    if not is_business_related(question):
+        logging.warning(f"Off-topic question rejected: {question}")
+        return "I'm sorry, but I can only answer questions related to plywood products, doors, laminates, and our Plywood Studio business. Please ask me about our products, brands (Centuryply, Sainik, Greenply), specifications, pricing, or store location."
     
     # Step 1: Check cache
     cached = cache_get(question)

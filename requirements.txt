@@ -1,14 +1,30 @@
+# AI/ML Libraries
 langchain
 langchain-openai
 langchain-community
+langchain-text-splitters
 openai>=1.0.0
+huggingface-hub  # For Meta Llama and Mistral models
+
+# Vector Store
+faiss-cpu
+
+# Web Framework
+fastapi
+uvicorn[standard]
+
+# Utilities
 python-dotenv
+requests
+
+# Caching (optional)
 redis==5.0.4
 redisvl
 langchain_redis
+
+# Monitoring (optional)
 prometheus_client
+
+# Other
 boto3
-fastapi
-uvicorn[standard]
 pypdf
-requests

@@ -8,9 +8,9 @@ from datetime import datetime
 
 # Use the working components
 from cache_store import get as cache_get, set as cache_set
-from llm_client_hybrid import call as llm_call
+from llm_client_langchain import call as llm_call
 from postprocess import secure_output
-from guardrails import apply_guardrails
+from guardrails import apply_guardrails, is_business_related
 from config import CACHE_TTL_SECONDS
 
 app = FastAPI(
@@ -542,6 +542,16 @@ async def chat_endpoint(message: ChatMessage):
     start_time = time.time()
     
     try:
+        # Check if question is business-related first
+        if not is_business_related(message.message):
+            logging.warning(f"Off-topic question rejected: {message.message}")
+            processing_time = int((time.time() - start_time) * 1000)
+            return ChatResponse(
+                response="I'm sorry, but I can only answer questions related to plywood products, doors, laminates, and our Plywood Studio business. Please ask me about our products, brands (Centuryply, Sainik, Greenply), specifications, pricing, or store location.",
+                timestamp=datetime.now().isoformat(),
+                response_time_ms=processing_time
+            )
+        
         # Check cache first
         cache_key = f"plywood_query:{hash(message.message)}"
         cached_response = cache_get(cache_key)
